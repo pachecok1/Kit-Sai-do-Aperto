@@ -110,5 +110,3 @@ async function revogarAcesso(email) {
     .update({ status: 'inativo', atualizado_em: new Date().toISOString() })
     .eq('email', email);
 }
-
-
