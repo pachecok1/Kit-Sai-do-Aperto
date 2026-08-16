@@ -126,6 +126,17 @@ export default function Dashboard() {
         <header className="mb-6 flex items-baseline justify-between">
           <div>
             <h1 className="ksa-display text-3xl">Kit Sai do Aperto</h1>
+    <button
+  onClick={async () => {
+    const res = await fetch('/api/download-ebook');
+    const { url } = await res.json();
+    if (url) window.open(url, '_blank');
+  }}
+  className="text-sm px-3 py-1.5 rounded-full font-medium mt-2"
+  style={{ background: '#2B2320', color: '#FBF9F5' }}
+>
+  📘 Baixar e-book
+</button>
             <p className="text-sm" style={{ color: '#8A8378' }}>Olá, {nome} · {mesLabel}</p>
           </div>
           <button onClick={handleLogout} className="flex items-center gap-1 text-sm" style={{ color: '#8A8378' }}>
