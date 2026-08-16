@@ -1,112 +1,91 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
-
-// Eventos que devem LIBERAR o acesso
-const EVENTOS_LIBERAR = ['compra aprovada', 'paid', 'approved', 'assinatura renovada'];
-
-// Eventos que devem REVOGAR o acesso
-const EVENTOS_REVOGAR = [
-  'reembolso',
-  'refunded',
-  'chargeback',
-  'assinatura cancelada',
-  'assinatura atrasada',
-  'subscription_canceled',
-  'subscription_late',
-];
-
-export async function POST(request) {
-  // 1) Confere o token secreto que você configurou na Kiwify.
-  // A Kiwify manda esse token como query string na URL do webhook,
-  // ex: https://seusite.com/api/webhooks/kiwify?token=SEU_TOKEN
-  const { searchParams } = new URL(request.url);
-  const tokenRecebido = searchParams.get('token');
-
-  if (tokenRecebido !== process.env.KIWIFY_WEBHOOK_TOKEN) {
-    return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
-  }
-
-  let payload;
-  try {
-    payload = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  // IMPORTANTE: durante o teste (botão "Testar Webhook" na Kiwify),
-  // logue o payload completo pra ver o formato exato que ela manda,
-  // e ajuste os campos abaixo se precisar.
-  console.log('Webhook Kiwify recebido:', JSON.stringify(payload));
-
-  const status = (
-    payload.order_status ||
-    payload.status ||
-    payload.type ||
-    ''
-  ).toString().toLowerCase();
-
-  const email = (
-    payload?.Customer?.email ||
-    payload?.customer?.email ||
-    payload?.data?.customer?.email ||
-    payload?.data?.buyer?.email ||
-    ''
-  ).toLowerCase().trim();
-
-  const orderId =
-    payload?.order_id || payload?.id || payload?.data?.id || null;
-
-  const produto =
-    payload?.Product?.product_name ||
-    payload?.product?.name ||
-    payload?.data?.product?.name ||
-    null;
-
-  if (!email) {
-    console.error('Webhook sem email do comprador:', payload);
-    return NextResponse.json({ error: 'Email não encontrado no payload' }, { status: 400 });
-  }
-
-  const deveLiberar = EVENTOS_LIBERAR.some((e) => status.includes(e));
-  const deveRevogar = EVENTOS_REVOGAR.some((e) => status.includes(e));
-
-  if (deveLiberar) {
-    await liberarAcesso(email, orderId, produto);
-  } else if (deveRevogar) {
-    await revogarAcesso(email);
-  } else {
-    console.log('Evento ignorado (não mapeado):', status);
-  }
-
-  return NextResponse.json({ ok: true });
-}
-
-async function liberarAcesso(email, orderId, produto) {
-  // 1) Marca/atualiza o comprador como ativo na tabela de controle
-  await supabaseAdmin.from('compradores').upsert({
-    email,
-    status: 'ativo',
-    kiwify_order_id: orderId,
-    produto,
-    atualizado_em: new Date().toISOString(),
-  });
-
-  // 2) Verifica se já existe conta de login pra esse email
-  const { data: usuariosExistentes } = await supabaseAdmin.auth.admin.listUsers();
-  const jaExiste = usuariosExistentes?.users?.some((u) => u.email === email);
-
-  if (!jaExiste) {
-    // 3) Cria a conta e manda um convite por e-mail pra pessoa definir a senha
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
+'use client';
+ 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabaseClient';
+ 
+// Coloque aqui o link de checkout do seu produto na Kiwify
+const LINK_CHECKOUT_KIWIFY = 'https://pay.kiwify.com.br/SEU-LINK-AQUI';
+ 
+export default function Login() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(false);
+ 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) router.replace('/dashboard');
+    })();
+  }, [router]);
+ 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErro('');
+    setCarregando(true);
+ 
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    setCarregando(false);
+ 
     if (error) {
-      console.error('Erro ao convidar usuário:', error.message);
+      setErro('E-mail ou senha incorretos.');
+      return;
     }
-  }
+    router.replace('/dashboard');
+  };
+ 
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#EDE9E3', color: '#2B2320' }}>
+      <div className="w-full max-w-sm rounded-2xl p-8 shadow-sm" style={{ background: '#FBF9F5', border: '1px solid #DDD6C9' }}>
+        <h1 className="ksa-display text-3xl mb-1">Kit Sai do Aperto</h1>
+        <p className="text-sm mb-6" style={{ color: '#8A8378' }}>
+          Organize suas finanças e respire mais tranquilo todo mês.
+        </p>
+ 
+        <form onSubmit={handleSubmit}>
+          <label className="text-xs uppercase tracking-wide" style={{ color: '#8A8378' }}>E-mail</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none"
+            style={{ border: '1px solid #DDD6C9', background: '#FFFFFF' }}
+            required
+          />
+ 
+          <label className="text-xs uppercase tracking-wide" style={{ color: '#8A8378' }}>Senha</label>
+          <input
+            type="password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            minLength={6}
+            className="w-full mt-1 mb-4 px-3 py-2 rounded-lg outline-none"
+            style={{ border: '1px solid #DDD6C9', background: '#FFFFFF' }}
+            required
+          />
+ 
+          {erro && <p className="text-sm mb-3" style={{ color: '#8B3A3A' }}>{erro}</p>}
+ 
+          <button
+            type="submit"
+            disabled={carregando}
+            className="w-full py-2.5 rounded-lg font-medium"
+            style={{ background: '#6B8F71', color: '#FBF9F5', opacity: carregando ? 0.7 : 1 }}
+          >
+            {carregando ? 'Um momento...' : 'Entrar'}
+          </button>
+        </form>
+ 
+        <p className="text-sm mt-5 text-center" style={{ color: '#8A8378' }}>
+          Ainda não comprou?{' '}
+          <a href={LINK_CHECKOUT_KIWIFY} className="underline" style={{ color: '#2B2320' }}>
+            Garanta seu acesso aqui
+          </a>
+        </p>
+      </div>
+    </div>
+  );
 }
-
-async function revogarAcesso(email) {
-  await supabaseAdmin
-    .from('compradores')
-    .update({ status: 'inativo', atualizado_em: new Date().toISOString() })
-    .eq('email', email);
-}
+ 
