@@ -2,13 +2,29 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
 
 // Eventos que devem LIBERAR o acesso
-const EVENTOS_LIBERAR = ['compra aprovada', 'paid', 'approved', 'assinatura renovada'];
+const EVENTOS_LIBERAR = [
+  'compra aprovada',
+  'compra_aprovada',
+  'paid',
+  'approved',
+  'aprovado',
+  'assinatura renovada',
+  'subscription_renewed',
+];
 
 // Eventos que devem REVOGAR o acesso
 const EVENTOS_REVOGAR = [
   'reembolso',
+  'reembolsada',
+  'compra_reembolsada',
   'refunded',
+  'estornado',
+  'estorno',
   'chargeback',
+  'recusada',
+  'compra_recusada',
+  'refused',
+  'declined',
   'assinatura cancelada',
   'assinatura atrasada',
   'subscription_canceled',
